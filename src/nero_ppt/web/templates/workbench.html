@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/styles.css?v={{ static_v() }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/new">Nero PPT</a>
+    <span id="stage" class="stage">加载中…</span>
+    <button id="logout" class="ghost" style="margin-left:auto">注销</button>
+    <span id="revision-badge" class="badge"></span>
+    <span id="model-badge" class="badge" title="本任务使用的模型"></span>
+    <span id="queue-hint" class="muted"></span>
+  </header>
+  <div class="progress-wrap">
+    <ol id="phase-progress" class="phase-progress"></ol>
+  </div>
+  <div id="conn-alert" class="conn-alert" hidden>与服务器的连接中断，正在重试…若长时间未恢复，请检查服务是否运行或刷新页面。</div>
+  <div id="job-error" class="job-error" hidden></div>
+  <main class="workbench">
+    <aside class="col-pages panel">
+      <h2>页面</h2>
+      <ul id="page-list"></ul>
+    </aside>
+    <section class="col-preview panel">
+      <h2>预览 <span id="preview-version" class="muted"></span></h2>
+      <div id="step-timeline" class="timeline"></div>
+      <div id="preview-area"><p class="muted">等待产物生成。</p></div>
+      <div id="review-actions" class="actions" hidden>
+        <button id="approve" class="primary">批准并继续</button>
+        <button id="reject" class="ghost">退回并说明</button>
+        <input id="reject-comment" placeholder="退回原因（可选）">
+      </div>
+      <p class="error" id="action-error" hidden></p>
+    </section>
+    <section class="col-detail panel">
+      <h2>内容与讲稿</h2>
+      <div id="outline-editor">
+        <h3>大纲</h3>
+        <ul id="outline-list" class="outline"></ul>
+        <button id="save-outline" class="ghost" hidden>保存大纲修改</button>
+      </div>
+      <div id="slide-detail" hidden>
+        <h3 id="detail-title"></h3>
+        <p class="muted" id="detail-purpose"></p>
+        <div id="detail-body"></div>
+        <h4>讲稿（Notes）</h4>
+        <pre id="detail-notes" class="notes"></pre>
+        <h4>来源</h4>
+        <ul id="detail-sources" class="sources"></ul>
+        <h4>修改意见</h4>
+        <textarea id="change-instruction" rows="2" placeholder="例如：把第二个要点改成移动端性能"></textarea>
+        <div class="actions">
+          <button id="plan-change" class="ghost">解释修改范围</button>
+          <button id="apply-change" class="primary" hidden>确认执行修改</button>
+        </div>
+        <p class="muted" id="change-plan-text"></p>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js?v={{ static_v() }}"></script>
+  <script>initWorkbenchPage('{{ job_id }}', {{ 'true' if auth_demo else 'false' }});</script>
+</body>
+</html>

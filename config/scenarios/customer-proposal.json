@@ -1,0 +1,31 @@
+{
+  "id": "customer-proposal",
+  "version": 1,
+  "name": "客户方案",
+  "required_inputs": [
+    "audience",
+    "objective",
+    "customer_context",
+    "duration_minutes"
+  ],
+  "sections": [
+    "客户现状与问题",
+    "方案目标",
+    "解决方案",
+    "能力与证据",
+    "实施计划",
+    "价值与下一步"
+  ],
+  "quality_rules": [
+    "方案回应客户具体问题",
+    "案例与收益数字具有来源",
+    "明确交付范围及前提"
+  ],
+  "notes_requirements": [
+    "逐页口述正文",
+    "关键数据解释",
+    "转场",
+    "预计讲述时长"
+  ],
+  "missing_evidence_policy": "flag_and_request_input"
+}

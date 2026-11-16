@@ -1,0 +1,30 @@
+{
+  "id": "business-review",
+  "version": 1,
+  "name": "工作汇报",
+  "required_inputs": [
+    "audience",
+    "objective",
+    "reporting_period",
+    "duration_minutes"
+  ],
+  "sections": [
+    "核心结论",
+    "关键指标",
+    "工作进展",
+    "问题与原因",
+    "后续行动与资源需求"
+  ],
+  "quality_rules": [
+    "核对指标时间范围与口径",
+    "区分已完成事项与计划",
+    "行动项明确负责人或标记待补充"
+  ],
+  "notes_requirements": [
+    "逐页口述正文",
+    "关键数据解释",
+    "转场",
+    "预计讲述时长"
+  ],
+  "missing_evidence_policy": "flag_and_request_input"
+}

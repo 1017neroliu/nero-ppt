@@ -1,0 +1,32 @@
+{
+  "id": "technical-solution",
+  "version": 1,
+  "name": "技术方案",
+  "required_inputs": [
+    "audience",
+    "objective",
+    "requirements",
+    "constraints",
+    "duration_minutes"
+  ],
+  "sections": [
+    "需求与约束",
+    "总体架构",
+    "关键设计",
+    "方案比较与权衡",
+    "风险与验证",
+    "实施计划"
+  ],
+  "quality_rules": [
+    "组件与数据流一致",
+    "区分已验证结论与设计假设",
+    "关键技术选择说明权衡"
+  ],
+  "notes_requirements": [
+    "逐页口述正文",
+    "关键数据解释",
+    "转场",
+    "预计讲述时长"
+  ],
+  "missing_evidence_policy": "flag_and_request_input"
+}

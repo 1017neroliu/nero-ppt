@@ -1,0 +1,246 @@
+[
+  {
+    "schema_version": 1,
+    "slide_id": "cover-1",
+    "purpose": "封面",
+    "headline": "2026 年第三季度经营汇报",
+    "body_blocks": [],
+    "visual_intent": "title",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "各位领导好，下面汇报三季度经营情况。",
+      "transition": "先看核心指标",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "bullets-1",
+    "purpose": "核心指标",
+    "headline": "核心经营指标",
+    "body_blocks": [
+      {
+        "kind": "bullets",
+        "label": "",
+        "items": [
+          "营业收入 4,820 万元，环比增长 12.4%",
+          "毛利率 38.2%，较上季度下降 1.1 个百分点",
+          "新增客户 126 家，续约率 91.5%"
+        ],
+        "items_sub": []
+      }
+    ],
+    "visual_intent": "bullets",
+    "density": "normal",
+    "source_refs": [
+      {
+        "source_id": "doc-1",
+        "block_id": "",
+        "locator": {},
+        "quote": "本季度营业收入 4,820 万元"
+      }
+    ],
+    "must_keep_fact_ids": [
+      "f-rev",
+      "f-margin"
+    ],
+    "speaker_notes": {
+      "script": "收入环比增长 12.4%，毛利率受成本影响小幅下降。",
+      "transition": "",
+      "source_explanations": [
+        "4,820 万元来自 Q3 经营汇报第一章"
+      ]
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "table-1",
+    "purpose": "指标对比",
+    "headline": "季度指标对比",
+    "body_blocks": [
+      {
+        "kind": "table",
+        "label": "",
+        "headers": [
+          "指标",
+          "Q2",
+          "Q3"
+        ],
+        "rows": [
+          [
+            "营业收入（万元）",
+            "4,288",
+            "4,820"
+          ],
+          [
+            "毛利率",
+            "39.3%",
+            "38.2%"
+          ]
+        ],
+        "note": ""
+      }
+    ],
+    "visual_intent": "table",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "表格显示收入与毛利率的季度变化。",
+      "transition": "",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "chart-1",
+    "purpose": "收入趋势",
+    "headline": "季度收入趋势（万元）",
+    "body_blocks": [
+      {
+        "kind": "chart",
+        "label": "",
+        "chart_type": "bar",
+        "categories": [
+          "Q1",
+          "Q2",
+          "Q3",
+          "Q4目标"
+        ],
+        "series": [
+          {
+            "name": "营业收入",
+            "values": [
+              3950,
+              4288,
+              4820,
+              5500
+            ]
+          }
+        ],
+        "note": ""
+      }
+    ],
+    "visual_intent": "chart_bar",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "收入连续三个季度增长，四季度目标 5,500 万元。",
+      "transition": "",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "two-col-1",
+    "purpose": "问题与行动",
+    "headline": "问题与后续行动",
+    "body_blocks": [
+      {
+        "kind": "bullets",
+        "label": "问题",
+        "items": [
+          "服务器成本上升 15%",
+          "促销折让增加"
+        ],
+        "items_sub": []
+      },
+      {
+        "kind": "bullets",
+        "label": "行动",
+        "items": [
+          "四季度收入目标 5,500 万元",
+          "毛利率恢复至 40%"
+        ],
+        "items_sub": []
+      }
+    ],
+    "visual_intent": "two_column",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "成本问题已定位，四季度双线改善。",
+      "transition": "",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "process-1",
+    "purpose": "交付流程",
+    "headline": "四季度交付流程",
+    "body_blocks": [
+      {
+        "kind": "process",
+        "label": "",
+        "steps": [
+          "需求冻结",
+          "批量交付",
+          "验收测试",
+          "复盘归档"
+        ],
+        "note": ""
+      }
+    ],
+    "visual_intent": "process",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "交付按四步流程推进。",
+      "transition": "",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  },
+  {
+    "schema_version": 1,
+    "slide_id": "summary-1",
+    "purpose": "总结",
+    "headline": "总结",
+    "body_blocks": [
+      {
+        "kind": "bullets",
+        "label": "",
+        "items": [
+          "收入连续增长，成本压力可控",
+          "四季度冲刺 5,500 万元"
+        ],
+        "items_sub": []
+      }
+    ],
+    "visual_intent": "summary",
+    "density": "normal",
+    "source_refs": [],
+    "must_keep_fact_ids": [],
+    "speaker_notes": {
+      "script": "以上就是本次汇报，请领导指正。",
+      "transition": "结束",
+      "source_explanations": []
+    },
+    "target_seconds": 45,
+    "is_appendix": false,
+    "outline_page_index": 0
+  }
+]

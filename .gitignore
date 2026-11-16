@@ -1,0 +1,26 @@
+# 密钥与凭据
+.env
+*.key
+
+# 数据目录：私有文件，禁止入库
+data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# 临时产物
+*.tmp
+/tmp/
+*.bak
+
+# OCR 语言包（工具自动下载，不属于项目代码）
+*.traineddata
+
+# 测试产生的 LibreOffice 临时配置
+tests/fixtures/.lo-profile/

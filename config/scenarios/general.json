@@ -1,0 +1,28 @@
+{
+  "id": "general",
+  "version": 1,
+  "name": "通用/自定义",
+  "required_inputs": [
+    "audience",
+    "objective",
+    "duration_minutes"
+  ],
+  "sections": [
+    "背景与目标",
+    "主要内容",
+    "关键数据",
+    "结论与下一步"
+  ],
+  "quality_rules": [
+    "每个结论有资料依据或标注待补充",
+    "数字保留原始口径与单位",
+    "行动项明确负责人或标记待补充"
+  ],
+  "notes_requirements": [
+    "逐页口述正文",
+    "关键数据解释",
+    "转场",
+    "预计讲述时长"
+  ],
+  "missing_evidence_policy": "flag_and_request_input"
+}

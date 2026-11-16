@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="/static/styles.css?v={{ static_v() }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/new">Nero PPT</a>
+    <span class="muted">新建任务</span>
+    <button id="logout" class="ghost">注销</button>
+  </header>
+  <main class="new-job">
+    <section class="panel">
+      <h2>1 · 上传资料</h2>
+      <p class="muted">支持文本型 PDF / DOCX / TXT / Markdown / PPTX，单文件 ≤ {{ max_upload_mb }}MB。</p>
+      <input type="file" id="material" multiple accept=".pdf,.docx,.txt,.md,.pptx">
+      <ul id="material-list" class="filelist"></ul>
+      <p class="error" id="material-error" hidden></p>
+      <h2>2 · 模板</h2>
+      <label class="radio"><input type="radio" name="template" value="builtin" checked> 内置经典模板</label>
+      <label class="radio"><input type="radio" name="template" value="upload"> 上传 PPTX/POTX</label>
+      <input type="file" id="template-file" accept=".pptx,.potx" hidden>
+      <p class="error" id="template-error" hidden></p>
+      <h2>3 · 需求</h2>
+      <label>主题 <input id="topic" placeholder="例如：三季度经营汇报"></label>
+      <div class="grid2">
+        <label>受众 <input id="audience" placeholder="例如：管理层"></label>
+        <label>用途 <input id="objective" placeholder="例如：季度汇报"></label>
+      </div>
+      <div class="grid3">
+        <label>页数下限 <input id="page-min" type="number" value="5" min="1"></label>
+        <label>页数上限 <input id="page-max" type="number" value="12" min="1"></label>
+        <label>时长（分钟）<input id="duration" type="number" value="10" min="1"></label>
+      </div>
+      <label>补充要求 <textarea id="extra" rows="3" placeholder="必含项、风格偏好、禁止内容等"></textarea></label>
+      <h2>4 · 场景</h2>
+      <select id="scene"></select>
+      <h2>5 · 模型</h2>
+      <div class="model-row">
+        <select id="model-select"></select>
+        <button id="test-model" class="ghost" disabled>测试可用性</button>
+        <button id="toggle-model-mgr" class="ghost">＋ 配置新模型</button>
+      </div>
+      <p id="model-test-status" class="muted"></p>
+      <p class="muted" id="model-hint"></p>
+      <div id="model-mgr" class="model-mgr" hidden>
+        <h3>配置模型信息（本地或远程 OpenAI 兼容接口均可）</h3>
+        <label>显示名称 <input id="m-name" placeholder="例如：DeepSeek Chat / 本地 Qwen"></label>
+        <label>API 地址 <input id="m-url" placeholder="远程：https://api.deepseek.com/v1 ；本地 Ollama：http://127.0.0.1:11434/v1"></label>
+        <label>模型名 <input id="m-model" placeholder="例如：deepseek-chat / qwen2.5:14b"></label>
+        <label>API Key <input id="m-key" type="password" placeholder="本地 Ollama 无需真实密钥（填任意占位即可）；密钥仅保存在服务端"></label>
+        <div class="actions">
+          <button id="save-model" class="primary">保存并使用</button>
+          <button id="cancel-model" class="ghost">取消</button>
+        </div>
+        <p class="error" id="model-mgr-error" hidden></p>
+      </div>
+      <h3 class="muted-title">已配置的模型 <span id="my-models-count" class="muted"></span></h3>
+      <ul id="my-models" class="filelist"></ul>
+      <p class="error" id="my-models-error" hidden></p>
+      <button id="create" class="primary">创建任务并准备资料</button>
+      <p class="error" id="create-error" hidden></p>
+    </section>
+    <section class="panel">
+      <h2>最近任务</h2>
+      <ul id="recent" class="joblist"></ul>
+    </section>
+  </main>
+  <script src="/static/app.js?v={{ static_v() }}"></script>
+  <script>initNewJobPage({{ 'true' if auth_demo else 'false' }});</script>
+</body>
+</html>
