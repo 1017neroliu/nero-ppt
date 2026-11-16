@@ -24,3 +24,6 @@ dist/
 
 # 测试产生的 LibreOffice 临时配置
 tests/fixtures/.lo-profile/
+
+# 运行日志与 pid
+logs/
