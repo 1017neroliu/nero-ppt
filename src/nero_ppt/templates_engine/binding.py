@@ -41,8 +41,21 @@ class BindingError(ValueError):
 
 
 def _layout_capacity(layout) -> int:
-    """版式的文本承载能力（正文槽位预算之和），用于回退排序。"""
-    return sum(s.text_budget_chars for s in layout.slots if s.kind in ("text", "bullets"))
+    """版式的文本承载能力（text/bullets 槽位物理面积之和，EMU²），用于回退排序。
+
+    用几何而非预算字数：预算随字号估算变化，曾导致同一模板在字号解析改进后
+    回退排序翻转、全部分页版式漂移（表格页被降级成文本、正文挤进小框）。
+    """
+    return sum(s.bounds_emu[2] * s.bounds_emu[3]
+               for s in layout.slots if s.kind in ("text", "bullets"))
+
+
+_TITLEISH_SLOT_IDS = {"nero.title", "nero.subtitle", "nero.section_no"}
+
+
+def _is_titleish(slot: Slot) -> bool:
+    """标题类槽位：内置命名或外部模板的 titleN 命名（含副标题/编号位）。"""
+    return slot.slot_id in _TITLEISH_SLOT_IDS or slot.slot_id.startswith("title")
 
 
 def _layout_can_host(layout, spec: SlideSpec) -> bool:
@@ -50,6 +63,10 @@ def _layout_can_host(layout, spec: SlideSpec) -> bool:
     kinds = {s.kind for s in layout.slots}
     text_slots = [s for s in layout.slots if s.kind in ("text", "bullets")]
     intent = spec.visual_intent
+    if intent in ("title", "section") and spec.body_blocks:
+        # 封面/章节版式无正文容器：带正文块时需要非标题类槽位，
+        # 否则降级内容会塞进副标题/编号窄框（严重溢出）
+        return any(not _is_titleish(s) for s in text_slots)
     if intent == "table":
         # 无表格版式时可降级为要点列表（数据保真）
         return "table" in kinds or bool(text_slots)
@@ -74,6 +91,10 @@ def choose_layout(profile: TemplateProfile, spec: SlideSpec) -> tuple[object, li
     for purpose in candidates:
         layout = by_purpose.get(purpose)
         if layout is not None:
+            if not _layout_can_host(layout, spec):
+                warnings.append(
+                    f"版式 {layout.layout_id} 无该页内容的容器（正文块无槽位可安放），改用其他版式")
+                continue
             if purpose not in (layout.supported_intents or []) and layout.supported_intents:
                 warnings.append(
                     f"版式 {layout.layout_id} 未显式声明支持 intent={spec.visual_intent}，按候选顺序使用")
@@ -182,7 +203,9 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
             or (any(isinstance(b, TableBlock) for b in spec.body_blocks) and "table" not in kinds)):
         downgraded = _downgrade_blocks(spec.body_blocks, layout, warnings, spec.slide_id)
         spec = spec.model_copy(update={"body_blocks": downgraded})
-    layout.purpose = _infer_dispatch_purpose(layout, spec)  # 回退版式按槽位推断渲染策略
+    # 渲染策略按内容类型推断；只用于本页绑定，不写回共享 profile 对象
+    #（写回会跨页污染 choose_layout 的 by_purpose 查找，使版式分配依赖页面顺序）
+    purpose = _infer_dispatch_purpose(layout, spec)
     bindings = []
     notes_parts = [spec.speaker_notes.script]
     if spec.speaker_notes.transition:
@@ -203,20 +226,24 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
     if title_slot is None:
         raise BindingError(f"版式 {layout.layout_id} 无标题槽位")
     _check_budget(title_slot, spec.headline, warnings, "headline")
-    bind(title_slot, "set_text", source="constant", constant_text=spec.headline)
+    # fit 下限：标题可读性硬底线（12~20pt），而非槽位软下限（font_pt×0.75 对大字号标题过紧，
+    # 如 54pt 章节页标题会被钉在 40pt 而放不下单行）
+    fit_min = max(12, min(title_slot.min_font_pt, 20)) if title_slot.min_font_pt else 12
+    bind(title_slot, "set_text", source="constant", constant_text=spec.headline,
+         fit_font=True, fit_min_font_pt=fit_min)
 
     blocks = spec.body_blocks
-    if layout.purpose == "cover":
+    if purpose == "cover":
         sub = _slot(layout, "nero.subtitle")
         if sub is not None:
             text = spec.purpose or spec.speaker_notes.script[:40]
             bind(sub, "set_text", source="constant", constant_text=text)
-    elif layout.purpose == "section":
+    elif purpose == "section":
         no_slot = _slot(layout, "nero.section_no")
         if no_slot is not None:
             bind(no_slot, "set_text", source="constant",
                  constant_text=f"{page_index:02d}")
-    elif layout.purpose in ("bullets", "summary"):
+    elif purpose in ("bullets", "summary"):
         items: list[str] = []
         subs: list[str] = []
         for b in blocks:
@@ -244,7 +271,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
                 lines.append(subs[i])
                 levels.append(1)
         bind(body_slot, "set_bullets", source="spec", text_lines=lines, line_levels=levels)
-    elif layout.purpose == "two_column":
+    elif purpose == "two_column":
         # 槽位回退：优先 nero.left/right；否则按 y 坐标排序的 text 槽位分左右（排除标题槽）
         text_like = sorted([s for s in layout.slots if s.kind in ("text", "bullets")
                             and s.slot_id != title_slot.slot_id],
@@ -270,7 +297,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
                 bind(right_slot, "set_text", source="constant", constant_text="")
         else:
             warnings.append("版式无第二栏槽位，双栏内容已合并至左栏")
-    elif layout.purpose == "table":
+    elif purpose == "table":
         tb = next((b for b in blocks if isinstance(b, TableBlock)), None)
         if tb is None:
             raise BindingError("表格页需要 table 块")
@@ -279,7 +306,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
         if tb.note:
             warnings.append(f"表格注释将写入讲稿：{tb.note}")
             notes_parts.append(f"【表格注释】{tb.note}")
-    elif layout.purpose == "chart":
+    elif purpose == "chart":
         cb = next((b for b in blocks if isinstance(b, ChartBlock)), None)
         if cb is None:
             raise BindingError("图表页需要 chart 块")
@@ -287,7 +314,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
         bind(chart_slot, "set_chart_data", source="spec", block_index=blocks.index(cb))
         if cb.note:
             notes_parts.append(f"【图表注释】{cb.note}")
-    elif layout.purpose == "process":
+    elif purpose == "process":
         pb = next((b for b in blocks if isinstance(b, ProcessStepBlock)), None)
         step_slots = [s for s in layout.slots if s.slot_id.startswith("nero.step")]
         if pb is None:
@@ -298,7 +325,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
         for i, step in enumerate(pb.steps):
             bind(step_slots[i], "set_text", source="spec",
                  constant_text=step)
-    elif layout.purpose == "image_text":
+    elif purpose == "image_text":
         img = next((b for b in blocks if isinstance(b, ImageRef)), None)
         image_slot = _slot(layout, "nero.image") or _slot_by_kind(layout, "image")
         if img is not None:
@@ -315,7 +342,7 @@ def plan_slide(spec: SlideSpec, profile: TemplateProfile,
             bind(body_slot, "set_bullets", source="spec",
                  text_lines=text_items, line_levels=[0] * len(text_items))
     else:
-        raise BindingError(f"未实现的版式用途：{layout.purpose}")
+        raise BindingError(f"未实现的版式用途：{purpose}")
 
     plan = RenderPlan(
         slide_id=spec.slide_id,

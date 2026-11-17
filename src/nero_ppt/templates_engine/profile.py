@@ -62,6 +62,10 @@ def _font_pt_of(shape: InspectShape, default: float = 14.0) -> float:
         for run in para.runs:
             if run.size_pt:
                 return run.size_pt
+    # run 无显式字号：用占位符继承链解析的生效字号（inspect 阶段提取），
+    # 避免 14pt 默认值对母版大字号标题（如 36pt）产生严重虚高的容量预算。
+    if shape.effective_font_pt:
+        return shape.effective_font_pt
     return default
 
 

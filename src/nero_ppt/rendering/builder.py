@@ -81,7 +81,8 @@ def build_deck(
     prs2 = Presentation(str(stage1))
     for idx, (plan, spec) in enumerate(zip(plans, specs)):
         slide = prs2.slides[idx]
-        _apply_plan(slide, plan, spec, resource_map, warnings)
+        _apply_plan(slide, plan, spec, resource_map, warnings,
+                    slide_height_emu=int(prs2.slide_height))
         write_notes(slide, plan)
     prs2.save(str(out_path))
     stage1.unlink(missing_ok=True)
@@ -89,7 +90,7 @@ def build_deck(
 
 
 def _apply_plan(slide, plan: RenderPlan, spec: SlideSpec, resource_map: dict[str, str],
-                warnings: list[str]) -> None:
+                warnings: list[str], slide_height_emu: int = 6858000) -> None:
     for binding in plan.slot_bindings:
         shape = _shape_by_id(slide, binding.object_id)
         if shape is None:
@@ -98,6 +99,19 @@ def _apply_plan(slide, plan: RenderPlan, spec: SlideSpec, resource_map: dict[str
         try:
             if action == "set_text":
                 ooxml.set_text_keep_format(shape.text_frame, binding.constant_text)
+                if binding.fit_font and binding.constant_text:
+                    fit = ooxml.apply_font_fit(
+                        shape, binding.constant_text,
+                        min_font_pt=float(binding.fit_min_font_pt) if binding.fit_min_font_pt else 12.0)
+                    if fit and fit.get("overflow"):
+                        warnings.append(
+                            f"页面 {plan.slide_id}：标题 {len(binding.constant_text)} 字按生效字号 "
+                            f"{fit['from_pt']:.0f}pt 缩至下限 {fit['to_pt']:.0f}pt 仍可能折行溢出，"
+                            f"建议精简标题或更换版式（文本未删减）")
+                    elif fit:
+                        warnings.append(
+                            f"页面 {plan.slide_id}：标题超出槽位单行宽度，字号已自适应 "
+                            f"{fit['from_pt']:.0f}pt → {fit['to_pt']:.0f}pt（文本未删减）")
             elif action == "set_bullets":
                 ooxml.set_bullets_keep_format(
                     shape.text_frame, binding.text_lines or ([binding.constant_text] if binding.constant_text else []),
@@ -111,6 +125,16 @@ def _apply_plan(slide, plan: RenderPlan, spec: SlideSpec, resource_map: dict[str
                     warnings.append(f"页面 {plan.slide_id}：数据列数与模板表格不同，已合并/补空适配（数据未删减）")
                 if block.note:
                     warnings.append(f"页面 {plan.slide_id} 表格注释写入讲稿")
+                # 表格垂直自适应：行高/字号压缩到形状与页面高度内（数据不删减）
+                tf = ooxml.fit_table(shape, slide_height_emu)
+                if tf and tf.get("overflow"):
+                    warnings.append(
+                        f"页面 {plan.slide_id}：表格 {tf['rows']} 行压缩至下限仍可能超出可用高度，"
+                        f"建议精简该表格数据或拆页（数据未删减）")
+                elif tf and tf.get("changed_font"):
+                    warnings.append(
+                        f"页面 {plan.slide_id}：表格行数较多，字号已自适应至 {tf['font_pt']:.0f}pt、"
+                        f"行高已压缩（数据未删减）")
             elif action == "set_chart_data":
                 block = spec.body_blocks[binding.block_index]
                 if not isinstance(block, ChartBlock):

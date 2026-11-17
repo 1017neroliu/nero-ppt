@@ -12,6 +12,7 @@ from pptx import Presentation
 from pptx.util import Pt
 
 from ..contracts import QAReport, RepairRound, SlideSpec, TemplateProfile
+from ..templates_engine.ooxml import body_available_width_emu, est_text_width_emu
 from .engine import run_qa
 
 AUTOFIXABLE = {"tiny_text"}
@@ -36,8 +37,13 @@ def repair_slide(pptx_path: str | Path, page_index: int, profile: TemplateProfil
         for para in shape.text_frame.paragraphs:
             for run in para.runs:
                 if run.font.size is not None and run.font.size.pt < slot.min_font_pt:
-                    run.font.size = Pt(slot.min_font_pt)
-                    actions.append(f"槽位 {slot.slot_id} 字号 {run.font.size.pt}→{slot.min_font_pt}pt")
+                    new_pt = slot.min_font_pt
+                    # 提升字号不得重新制造溢出：标题 fit 缩字后恰好单行放下时，
+                    # 提回槽位软下限（font_pt×0.75）会再次超宽出格
+                    if run.text and est_text_width_emu(run.text, new_pt) > body_available_width_emu(shape):
+                        continue
+                    run.font.size = Pt(new_pt)
+                    actions.append(f"槽位 {slot.slot_id} 字号 {run.font.size.pt}→{new_pt}pt")
     if actions:
         prs.save(str(pptx_path))
     return actions

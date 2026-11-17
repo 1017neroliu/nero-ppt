@@ -171,7 +171,7 @@ def check_overflow(spec: SlideSpec, layout: Layout) -> list[QACheck]:
                 "overflow_risk", "文字容量风险", "fail", "warning",
                 slot.object_id, slot.slot_id,
                 observed=f"{len(text)} 字", expected=f"≤{slot.text_budget_chars} 字（估算）",
-                suggested="精简表达或拆页；自动修复不删减数字与限定条件"))
+                suggested="精简表达或拆页；渲染层已按槽位宽度自动缩字保单行（不删减文本），超预算仅提示容量风险"))
 
     for slot in layout.slots:
         if slot.kind in ("text", "bullets"):

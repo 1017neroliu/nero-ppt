@@ -32,6 +32,10 @@ class SlotBinding(NeroModel):
     line_levels: list[StrictInt] = Field(default_factory=list)
     resource_id: StrictStr = ""
     edit_action: EditAction = "set_text"
+    # 标题单行宽度自适应：渲染写入文本后按生效字号估算宽度，超出则缩小 run 字号
+    fit_font: bool = False
+    # 自适应字号下限（来自模板槽位 min_font_pt，0 时渲染层用默认 12pt）
+    fit_min_font_pt: int = 0
 
 
 class RenderPlan(NeroModel):

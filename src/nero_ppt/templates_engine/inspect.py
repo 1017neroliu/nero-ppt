@@ -13,6 +13,8 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.oxml.ns import qn
 
+from .ooxml import effective_font_pt
+
 SMARTART_URI = "http://schemas.openxmlformats.org/drawingml/2006/diagram"
 CHART_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 OLE_URI = "urn:schemas-microsoft-com:vml"  # OLE 通过 graphicFrame 的 v:shape 识别
@@ -56,6 +58,9 @@ class InspectShape:
     is_group: bool = False
     children: list["InspectShape"] = field(default_factory=list)
     unsupported_kind: str = ""  # smartart / ole / 其他不可编辑类型
+    # 占位符继承生效字号（layout/master 链解析，pt；0 表示未知）。
+    # run 无显式字号时预筛预算必须用它，否则按 14pt 默认会严重虚高（如母版标题 36pt）。
+    effective_font_pt: float = 0.0
 
 
 @dataclass
@@ -159,6 +164,10 @@ def _inspect_shape(shape, external_links: list[str], image_parts: list[str]) -> 
         return info
 
     if shape.has_text_frame:
+        try:
+            info.effective_font_pt = effective_font_pt(shape, default_pt=0.0)
+        except Exception:  # noqa: BLE001
+            info.effective_font_pt = 0.0
         info.paragraphs = [_paragraph_info(p) for p in shape.text_frame.paragraphs]
         # 超链接
         for p in info.paragraphs:

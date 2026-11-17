@@ -258,6 +258,51 @@ def test_external_template_bullets_fallback(tmp_path):
     assert result.slide_count == 1
     assert plans[0].layout_id == "sec1"  # 回退到正文槽位最大的版式
     assert any("回退" in w for w in result.warnings)
+
+
+def test_title_font_fit_on_overflow(tmp_path):
+    """超长标题渲染时自动缩字号，保证单行放下（复现 6.1-sol 任务出格场景）。
+
+    外部模板标题槽无 run 显式字号（继承母版字号），超长标题此前直接写入后
+    折行溢出占位符；现在绑定层标 fit_font，渲染层按生效字号估算并缩小。
+    """
+
+    from nero_ppt.contracts import Layout, Slot, TemplateProfile
+    from nero_ppt.rendering.builder import build_from_specs
+    from nero_ppt.templates_engine.ooxml import est_text_width_emu
+
+    # 标题槽：宽 9in（去掉内边距后 ≈8.8in）；无预算/字号信息，模拟外部模板提取结果
+    profile = TemplateProfile(
+        template_id="fit-tpl", file_hash="f" * 64, file_ext=".pptx",
+        slide_width_emu=12192000, slide_height_emu=6858000,
+        layouts=[
+            Layout(layout_id="sec1", purpose="section", source_page_kind="slide",
+                   source_slide_id=257,
+                   slots=[Slot(slot_id="title0", object_id=4, kind="text",
+                               bounds_emu=(1400000, 3700000, 8800000, 900000)),
+                          Slot(slot_id="text1", object_id=3, kind="text",
+                               bounds_emu=(1000000, 1800000, 9000000, 4200000),
+                               text_budget_chars=399)]),
+        ])
+    headline = "EtherCAT具备实时控制价值，年度成果需以工程验证闭环及实测证据支撑"  # 33 字，36pt 下超宽
+    spec = SlideSpec(slide_id="b1", headline=headline, visual_intent="bullets",
+                     body_blocks=[{"kind": "bullets", "items": ["要点一", "要点二", "要点三"]}],
+                     speaker_notes={"script": "x"})
+    out = tmp_path / "fit.pptx"
+    result, plans = build_from_specs(TEMPLATE, profile, [spec], out, tmp_dir=tmp_path)
+    assert result.slide_count == 1
+
+    prs = Presentation(str(out))
+    slide = prs.slides[0]
+    title = next(sh for sh in slide.shapes if sh.shape_id == 4)
+    run = title.text_frame.paragraphs[0].runs[0]
+    assert run.text == headline  # 文本不删减
+    assert run.font.size is not None, "超宽标题应写入显式缩字字号"
+    to_pt = run.font.size.pt
+    avail = title.width - 2 * 91440
+    assert est_text_width_emu(headline, to_pt) <= avail, "缩字后应单行放下"
+    assert to_pt >= 12.0, "不低于可读下限"
+    assert any("自适应" in w for w in result.warnings)
     # 内容写入 text1 槽位
     prs = Presentation(str(out))
     body = next(sh for sh in prs.slides[0].shapes if sh.shape_id == 3)

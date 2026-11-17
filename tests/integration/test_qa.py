@@ -109,6 +109,45 @@ def test_t13_repair_loop_stops(profile, specs, tmp_path):
     assert any(rr.result in ("stopped", "no_change") for rr in rounds)
 
 
+def test_repair_lift_respects_single_line(profile, tmp_path):
+    """tiny_text 提升不得撤销标题 fit 缩字：提升后单行放不下时保持 fit 结果。
+
+    复现 6.1-sol 任务：fit 将 36pt 缩至 26pt 单行放下，repair 按槽位软下限
+    27pt 提回后重新超宽出格。
+    """
+    from pptx.util import Pt
+
+    from nero_ppt.qa.repair import repair_slide
+    from nero_ppt.templates_engine.ooxml import est_text_width_emu
+
+    layout = next(l for l in profile.layouts if l.layout_id == "bullets")
+    title_slot = next(s for s in layout.slots if s.slot_id == "nero.title")
+    spec = SlideSpec(slide_id="s1", headline="要点页标题",
+                     speaker_notes={"script": "x"})
+    out = tmp_path / "fit-repair.pptx"
+    _, plans = build_from_specs(TEMPLATE, profile, [spec], out, tmp_dir=tmp_path)
+
+    prs = Presentation(str(out))
+    slide = prs.slides[0]
+    title = next(sh for sh in slide.shapes if sh.shape_id == title_slot.object_id)
+    run = next(r for p in title.text_frame.paragraphs for r in p.runs)
+    run.font.size = Pt(26)  # 模拟 fit 结果：低于软下限但单行放下
+    prs.save(str(out))
+
+    repair_slide(str(out), 0, profile, layout)
+
+    prs2 = Presentation(str(out))
+    title2 = next(sh for sh in prs2.slides[0].shapes if sh.shape_id == title_slot.object_id)
+    run2 = next(r for p in title2.text_frame.paragraphs for r in p.runs)
+    est = est_text_width_emu(run2.text, run2.font.size.pt)
+    avail = title2.width - 2 * 91440
+    if est > avail:
+        assert run2.font.size.pt == 26, "提升会重新溢出时必须保持 fit 字号"
+    else:
+        # 本例标题短，提升到下限仍单行放下 → 允许提升
+        assert run2.font.size.pt >= min(27, title_slot.min_font_pt)
+
+
 def test_report_hash_matches_artifact(profile, specs, clean_build):
     out, plans = clean_build
     import hashlib
