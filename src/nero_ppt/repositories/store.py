@@ -68,7 +68,9 @@ class JobRepo:
     def update_state(self, job_id: str, expected_revision: int, *, phase: str | None = None,
                      status: str | None = None, brief: dict | None = None,
                      batch_index: int | None = None, error: str | None = None,
-                     template_profile_id: str | None = None) -> int:
+                     template_profile_id: str | None = None,
+                     model_profile_id: str | None = None,
+                     clear_model: bool = False) -> int:
         """乐观锁状态更新：成功返回新 revision；版本不匹配抛 ConflictError。"""
         sets = ["job_revision=job_revision+1", "updated_at=?"]
         args: list = [now_iso()]
@@ -90,6 +92,11 @@ class JobRepo:
         if template_profile_id is not None:
             sets.append("template_profile_id=?")
             args.append(template_profile_id)
+        if model_profile_id is not None:
+            sets.append("model_profile_id=?")
+            args.append(model_profile_id)
+        elif clear_model:
+            sets.append("model_profile_id=NULL")
         args.append(job_id)
         args.append(expected_revision)
         cur = self.conn.execute(

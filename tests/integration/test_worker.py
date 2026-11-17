@@ -40,6 +40,22 @@ def test_transition_table_complete():
     assert transition(State("batch", "awaiting_review"), "approve_batch_final") == State("final", "running")
     assert transition(State("final", "running"), "final_done") == State("final", "awaiting_review")
     assert transition(State("final", "awaiting_review"), "approve_final") == State("final", "completed")
+    # 阶段回退：后续阶段回到大纲修改（含已发布终态）
+    for src in (State("sample", "awaiting_review"), State("sample", "failed"),
+                State("batch", "awaiting_review"), State("batch", "failed"),
+                State("final", "awaiting_review"), State("final", "failed"),
+                State("final", "completed")):
+        assert transition(src, "reopen_outline") == State("outline", "awaiting_review")
+    # 阶段切换（向导导航）：非运行中状态均可切换；目标是否已到达由服务层水印校验，
+    # 同阶段重复切换由服务层拦（transition 层不做阶段相等检查）
+    assert transition(State("outline", "awaiting_review"), "reopen_outline") == State("outline", "awaiting_review")
+    assert transition(State("intake", "ready"), "reopen_sample") == State("sample", "awaiting_review")
+    assert transition(State("intake", "needs_input"), "reopen_final") == State("final", "awaiting_review")
+    assert transition(State("sample", "interrupted"), "reopen_outline") == State("outline", "awaiting_review")
+    with pytest.raises(TransitionError):
+        transition(State("final", "running"), "reopen_outline")  # 生成中不可切换
+    with pytest.raises(TransitionError):
+        transition(State("intake", "running"), "reopen_sample")  # 解析中不可切换
     # 异常路径
     assert transition(State("batch", "running"), "cancel") == State("batch", "cancelled")
     assert transition(State("final", "running"), "fail") == State("final", "failed")

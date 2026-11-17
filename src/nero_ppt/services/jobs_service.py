@@ -96,10 +96,67 @@ class JobsService:
                 "SELECT id, kind, status, error, updated_at FROM steps"
                 " WHERE job_id=? ORDER BY created_at DESC LIMIT 12", (job_id,))
         ]
-        # 产物：取最新含产物的修订（渲染产物登记在渲染时 revision）
+        # 产物：sample 与 final 各取其最新修订的组合（切换步骤时不丢历史产物展示；
+        # 每组内部始终是最新一次执行的结果）
+        def _max_rev(kind: str) -> int | None:
+            row = self.ctx.conn.execute(
+                "SELECT MAX(revision) AS r FROM revisions WHERE job_id=? AND kind=?",
+                (job_id, kind)).fetchone()
+            return row["r"]
+
+        def _max_art_rev(pattern: str) -> int | None:
+            row = self.ctx.conn.execute(
+                "SELECT MAX(revision) AS r FROM artifacts WHERE job_id=? AND relative_path LIKE ?",
+                (job_id, f"%{pattern}")).fetchone()
+            return row["r"]
+
         latest_art_rev = self.ctx.conn.execute(
             "SELECT MAX(revision) AS r FROM artifacts WHERE job_id=?", (job_id,)).fetchone()["r"]
-        artifacts = self.ctx.records.artifacts_for_revision(job_id, latest_art_rev) if latest_art_rev else []
+        sample_rev = _max_art_rev("batch-sample.pptx")
+        final_rev = _max_art_rev("/final.pptx")
+        artifacts = []
+        seen = set()
+        for rev in [latest_art_rev, sample_rev, final_rev]:
+            if rev and rev not in seen:
+                seen.add(rev)
+                artifacts.extend(self.ctx.records.artifacts_for_revision(job_id, rev))
+        # 各步骤产物修订号（供前端判断下游过期：如大纲修订晚于规格修订 → 样张需重跑）
+
+        step_revisions = {
+            "outline": _max_rev("outline"),
+            "specs": _max_rev("specs"),
+            "sample_render": _max_art_rev("batch-sample.pptx"),
+            "final_render": _max_art_rev("/final.pptx"),
+        }
+
+        def _render_versions(pattern: str) -> list[dict]:
+            """某类渲染产物的全部版本（按生成顺序）：供前端版本历史浏览/下载。"""
+            revs = self.ctx.conn.execute(
+                "SELECT DISTINCT revision FROM artifacts WHERE job_id=? AND relative_path LIKE ?"
+                " ORDER BY revision", (job_id, f"%{pattern}")).fetchall()
+            out = []
+            for i, row in enumerate(revs, 1):
+                rev = row["revision"]
+                files: dict[str, str] = {}
+                thumb_ids: list[str] = []
+                created = None
+                for a in self.ctx.records.artifacts_for_revision(job_id, rev):
+                    created = created or a["created_at"]
+                    if a["kind"] in ("pptx", "pdf", "notes"):
+                        files[a["kind"]] = a["id"]
+                    elif a["kind"] == "thumbnail":
+                        thumb_ids.append(a["id"])
+                out.append({"version": i, "revision": rev, "created_at": created,
+                            "files": files, "thumb_ids": thumb_ids})
+            return out
+
+        render_versions = {"sample": _render_versions("batch-sample.pptx"),
+                           "final": _render_versions("/final.pptx")}
+        materials = [
+            {"id": d["id"], "display_name": d["display_name"], "kind": d["kind"],
+             "parse_status": d["parse_status"]}
+            for d in self.ctx.records.documents_for_job(job_id)
+        ]
         model_info = None
         if job["model_profile_id"]:
             from ..services.models import load_catalog
@@ -121,7 +178,12 @@ class JobsService:
             "pending_step": dict(pending_step) if pending_step else None,
             "steps": steps_history,
             "artifacts": [{"id": a["id"], "kind": a["kind"], "slide_id": a["slide_id"],
-                           "relative_path": a["relative_path"]} for a in artifacts],
+                           "relative_path": a["relative_path"], "revision": a["revision"]} for a in artifacts],
+            "step_revisions": step_revisions,
+            "render_versions": render_versions,
+            "reached_phases": sorted(self._reached_phases(job_id),
+                                     key=states.PHASES.index),
+            "materials": materials,
         }
 
     # ---------------------------------------------------------------- 上传
@@ -229,6 +291,131 @@ class JobsService:
             "UPDATE steps SET status='cancelled', updated_at=? WHERE job_id=? AND status='pending'",
             (now_iso(), job_id))
         return {"revision": new_rev, "status": new.status}
+
+    def set_job_model(self, owner_id: str, job_id: str, model_profile_id: str,
+                      expected_revision: int, rerun_failed: bool = False) -> dict:
+        """详情页配置任务模型：校验目录条目后绑定；可选立即重试最近的失败/中断步骤。
+
+        用于历史任务未配模型（或模型失效）导致生成失败后的补配重跑。
+        """
+        from ..services.models import load_catalog
+
+        job = self._owned(owner_id, job_id)
+        catalog = load_catalog(self.ctx.settings.data_dir, self.ctx.settings)
+        entry = catalog.get(model_profile_id)
+        if entry is None:
+            raise JobError("validation", f"模型配置不存在：{model_profile_id}", 422)
+        if not entry.available:
+            raise JobError("validation",
+                           f"模型 {entry.name} 不可用：{entry.unavailable_reason}", 422)
+        try:
+            new_rev = self.ctx.jobs.update_state(job_id, expected_revision,
+                                                 model_profile_id=model_profile_id,
+                                                 error="")
+        except ConflictError as exc:
+            raise JobError("revision_conflict", str(exc), 409,
+                           {"current_revision": exc.current_revision})
+        step_id = None
+        if rerun_failed:
+            row = self.ctx.conn.execute(
+                "SELECT id FROM steps WHERE job_id=? AND status IN ('failed','interrupted')"
+                " ORDER BY updated_at DESC LIMIT 1", (job_id,)).fetchone()
+            if row is not None:
+                step_id = row["id"]
+                self.ctx.steps.requeue(step_id)
+                self.ctx.jobs.update_state(job_id, new_rev, status="running", error="")
+                new_rev = self.ctx.jobs.get(job_id)["job_revision"]
+        return {"revision": new_rev, "model": entry.public(), "retried_step": step_id}
+
+    def reopen_to(self, owner_id: str, job_id: str, target_phase: str,
+                  expected_revision: int, rerun: bool = False,
+                  render_only: bool = False) -> dict:
+        """向导式步骤切换：回到目标阶段（已有产物保留），可选立即重新执行该步骤。
+
+        - rerun=False：仅切换（查看/编辑该步已有结果，任务状态回退到该阶段待审核）。
+        - rerun=True：切换并立即重跑（状态置 running 并入队该阶段步骤），
+          跑完生成新修订覆盖该步产物；下游产物仍为旧版，由前端提示逐步重跑。
+        - render_only=True（仅 sample 生效）：不重新生成规格，用现有规格与当前渲染
+          代码重出样张——用于渲染逻辑修复后让样张与整稿一致，内容不变。
+        """
+        job = self._owned(owner_id, job_id)
+        if target_phase not in states.PHASES:
+            raise JobError("validation", f"未知阶段 {target_phase}", 422)
+        # intake/ready 重跑 = 启动解析（start 语义：置 running + 入队 parse）
+        cur_probe = states.State(job["phase"], job["status"])
+        if target_phase == "intake" and rerun and cur_probe == states.State("intake", "ready"):
+            started = self.start(owner_id, job_id, expected_revision)
+            return {"revision": started["revision"], "reopened": True, "phase": "intake",
+                    "status": "running", "rerun": True, "step_id": started["step_id"]}
+        reached = self._reached_phases(job_id)
+        if target_phase not in reached:
+            raise JobError("state", f"阶段 {target_phase} 尚未执行过，无法切换", 409)
+        cur = states.State(job["phase"], job["status"])
+        if not rerun and cur.phase == target_phase and cur.status == "awaiting_review":
+            raise JobError("state", "已在该阶段待审核，无需切换", 409)
+        try:
+            new = states.transition(cur, f"reopen_{target_phase}")
+        except states.TransitionError as exc:
+            raise JobError("state", str(exc), 409)
+        if rerun:
+            new = states.State(target_phase, "running")
+        try:
+            new_rev = self.ctx.jobs.update_state(job_id, expected_revision,
+                                                 phase=new.phase, status=new.status,
+                                                 error="")
+        except ConflictError as exc:
+            raise JobError("revision_conflict", str(exc), 409,
+                           {"current_revision": exc.current_revision})
+        # 作废残留的 pending/running 步骤（重跑入新步骤，旧的不应再被领取）
+        self.ctx.conn.execute(
+            "UPDATE steps SET status='cancelled', updated_at=? "
+            "WHERE job_id=? AND status IN ('pending','running')",
+            (now_iso(), job_id))
+        step_id = None
+        if rerun:
+            step_id = self._enqueue_stage_step(job_id, target_phase, new_rev,
+                                               render_only=render_only)
+        return {"revision": new_rev, "reopened": True, "phase": new.phase,
+                "status": new.status, "rerun": rerun, "step_id": step_id}
+
+    # 各阶段的重跑步骤：intake→重新解析（含大纲重生成链路）、outline→重新生成大纲、
+    # sample→重新生成规格+样张、final→重新组装整稿
+    _STAGE_STEP = {"intake": "parse", "outline": "outline",
+                   "sample": "generate_specs", "final": "assemble"}
+
+    def _enqueue_stage_step(self, job_id: str, phase: str, new_rev: int,
+                            render_only: bool = False) -> str | None:
+        kind = self._STAGE_STEP.get(phase)
+        if kind is None:
+            return None
+        # 样张支持仅重渲染：规格未变时用当前代码重渲染（不调模型，排版与整稿一致）
+        if phase == "sample" and render_only:
+            kind = "render_batch"
+        payload = {"scope_key": "sample"} if kind in ("generate_specs", "render_batch") else None
+        return self.ctx.steps.enqueue(job_id, kind, input_revision=new_rev,
+                                      scope_key="sample" if kind == "render_batch" else "rerun",
+                                      payload=payload)
+
+    def _reached_phases(self, job_id: str) -> set[str]:
+        """已到达阶段（按产物推断，回退不影响）：intake 恒可达；
+        outline=有大纲修订；sample=有规格修订；final=有整稿渲染产物。"""
+        reached = {"intake"}
+        row = self.ctx.conn.execute(
+            "SELECT 1 FROM revisions WHERE job_id=? AND kind='outline' LIMIT 1",
+            (job_id,)).fetchone()
+        if row:
+            reached.add("outline")
+        row = self.ctx.conn.execute(
+            "SELECT 1 FROM revisions WHERE job_id=? AND kind='specs' LIMIT 1",
+            (job_id,)).fetchone()
+        if row:
+            reached.add("sample")
+        row = self.ctx.conn.execute(
+            "SELECT 1 FROM artifacts WHERE job_id=? AND relative_path LIKE '%/final.pptx' LIMIT 1",
+            (job_id,)).fetchone()
+        if row:
+            reached.add("final")
+        return reached
 
     def retry_step(self, owner_id: str, job_id: str, step_id: str,
                    expected_revision: int) -> dict:

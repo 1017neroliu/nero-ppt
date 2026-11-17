@@ -56,6 +56,17 @@ class ActionRequest(BaseModel):
     request_id: str | None = None
 
 
+class ReopenRequest(ActionRequest):
+    phase: str
+    rerun: bool = False
+    render_only: bool = False
+
+
+class SetJobModelRequest(ActionRequest):
+    model_profile_id: str
+    rerun_failed: bool = False
+
+
 def svc(ctx: WebContext) -> JobsService:
     return JobsService(ctx)
 
@@ -265,6 +276,40 @@ def register_api_routes(app) -> None:
         require_same_origin(request)
         try:
             return svc(ctx).retry(user["id"], job_id, body.expected_revision)
+        except JobError as exc:
+            raise _job_error(exc, request.state.request_id)
+
+    @router.post("/jobs/{job_id}/reopen-outline")
+    def reopen_outline(job_id: str, body: ActionRequest, request: Request,
+                       user=Depends(get_current_user), ctx: WebContext = Depends(get_ctx)):
+        """阶段回退：回到大纲修改，批准后重新生成样张/批次/整稿。"""
+        require_same_origin(request)
+        try:
+            return svc(ctx).reopen_to(user["id"], job_id, "outline", body.expected_revision)
+        except JobError as exc:
+            raise _job_error(exc, request.state.request_id)
+
+    @router.post("/jobs/{job_id}/reopen")
+    def reopen(job_id: str, body: ReopenRequest, request: Request,
+               user=Depends(get_current_user), ctx: WebContext = Depends(get_ctx)):
+        """向导式步骤切换：phase 为目标阶段，rerun=True 时立即重跑该步骤；
+        render_only=True（sample 专用）仅用现有规格重渲染样张（内容不变）。"""
+        require_same_origin(request)
+        try:
+            return svc(ctx).reopen_to(user["id"], job_id, body.phase,
+                                      body.expected_revision, rerun=body.rerun,
+                                      render_only=body.render_only)
+        except JobError as exc:
+            raise _job_error(exc, request.state.request_id)
+
+    @router.put("/jobs/{job_id}/model")
+    def set_job_model(job_id: str, body: SetJobModelRequest, request: Request,
+                      user=Depends(get_current_user), ctx: WebContext = Depends(get_ctx)):
+        """详情页配置任务模型；rerun_failed=True 时立即重试最近的失败/中断步骤。"""
+        require_same_origin(request)
+        try:
+            return svc(ctx).set_job_model(user["id"], job_id, body.model_profile_id,
+                                          body.expected_revision, rerun_failed=body.rerun_failed)
         except JobError as exc:
             raise _job_error(exc, request.state.request_id)
 

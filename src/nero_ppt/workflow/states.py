@@ -46,6 +46,8 @@ TRANSITIONS: dict[str, tuple[str, str]] = {
     "approve_batch_final": ("final", "running"),       # 全部批次完成 → final/running
     "final_done": ("same", "awaiting_review"),         # final/running → final/awaiting_review
     "approve_final": ("same", "completed"),            # final/awaiting_review → final/completed
+    # 阶段回退（reopen_<phase>）不走本表：transition() 内通用校验
+    # （仅待审核/失败/已发布可回退、不可指向未到达阶段），见 transition()
     "cancel": ("same", "cancelled"),
     "fail": ("same", "failed"),
     "retry": ("same", "running"),                      # failed/interrupted → 原 phase/running
@@ -59,8 +61,18 @@ class TransitionError(ValueError):
 
 def transition(current: State, event: str) -> State:
     """校验并计算目标状态。不修改存储。"""
-    if current.is_terminal and event != "retry":
+    if current.is_terminal and not (event == "retry" or event.startswith("reopen_")):
         raise TransitionError(f"终态 {current.phase}/{current.status} 不能执行 {event}")
+    if event.startswith("reopen_"):
+        # 阶段切换（向导式导航）：非运行中状态均可切换（含 intake 的待启动/待补充、
+        # 中断态）；目标是否已到达由服务层水印校验。
+        target = event[len("reopen_"):]
+        if target not in PHASES:
+            raise TransitionError(f"未知回退目标 {target}")
+        if current.is_running:
+            raise TransitionError(
+                f"状态 {current.phase}/{current.status} 正在执行，完成后才能切换步骤")
+        return State(target, "ready" if target == "intake" else "awaiting_review")
     if event == "retry":
         if current.status not in ("failed", "interrupted"):
             raise TransitionError(f"仅 failed/interrupted 可重试，当前 {current.status}")
@@ -94,6 +106,7 @@ def _precheck(current: State, event: str) -> None:
         "approve_batch_final": (State("batch", "awaiting_review"),),
         "final_done": (State("final", "running"),),
         "approve_final": (State("final", "awaiting_review"),),
+        # reopen_* 事件由 transition() 内通用分支校验，不在本表
     }
     if event in rules and current not in rules[event]:
         raise TransitionError(
