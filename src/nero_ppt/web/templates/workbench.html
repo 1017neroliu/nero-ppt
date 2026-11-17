@@ -10,13 +10,22 @@
   <header class="topbar">
     <a class="brand" href="/new">Nero PPT</a>
     <span id="stage" class="stage">加载中…</span>
+    <span id="model-config" class="model-config">
+      <span id="model-badge" class="badge" title="任务使用的模型">模型：未绑定</span>
+      <button id="model-toggle" class="ghost model-toggle" type="button">⚙ 配置</button>
+      <span id="model-panel" class="model-panel" hidden>
+        <select id="model-select"></select>
+        <button id="model-save" class="primary" type="button">保存</button>
+        <label class="model-rerun"><input id="model-rerun-failed" type="checkbox" checked>保存后重试失败步骤</label>
+      </span>
+    </span>
     <button id="logout" class="ghost" style="margin-left:auto">注销</button>
     <span id="revision-badge" class="badge"></span>
-    <span id="model-badge" class="badge" title="本任务使用的模型"></span>
     <span id="queue-hint" class="muted"></span>
   </header>
   <div class="progress-wrap">
     <ol id="phase-progress" class="phase-progress"></ol>
+    <div id="step-nav" class="step-nav"></div>
   </div>
   <div id="conn-alert" class="conn-alert" hidden>与服务器的连接中断，正在重试…若长时间未恢复，请检查服务是否运行或刷新页面。</div>
   <div id="job-error" class="job-error" hidden></div>
@@ -37,9 +46,11 @@
       <p class="error" id="action-error" hidden></p>
     </section>
     <section class="col-detail panel">
-      <h2>内容与讲稿</h2>
+      <div class="detail-tabs" role="tablist">
+        <button id="tab-detail" class="tab active" type="button">页面内容</button>
+        <button id="tab-outline" class="tab" type="button">大纲</button>
+      </div>
       <div id="outline-editor">
-        <h3>大纲</h3>
         <ul id="outline-list" class="outline"></ul>
         <button id="save-outline" class="ghost" hidden>保存大纲修改</button>
       </div>
@@ -59,6 +70,7 @@
         </div>
         <p class="muted" id="change-plan-text"></p>
       </div>
+      <p class="muted" id="detail-empty">点击左侧页面查看该页内容与讲稿；切到「大纲」可总览/调整全篇结构。</p>
     </section>
   </main>
   <script src="/static/app.js?v={{ static_v() }}"></script>
